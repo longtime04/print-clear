@@ -11,8 +11,12 @@ struct LayoutView: View {
     @State private var newText = ""
     @State private var newFontSize: Double = 16
     @State private var selectedTemplate: LayoutTemplate = .smart
+    @State private var focusedField: SizeField?
     @State private var rendering = false
     @State private var note = ""
+
+    /// 尺寸面板里正在输的框（宽 / 高），用来收起键盘。
+    private enum SizeField { case width, height }
 
     var body: some View {
         ZStack {
@@ -38,6 +42,17 @@ struct LayoutView: View {
                     previewCard
                 }
                 .padding()
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .toolbar {
+            // 数字键盘没有回车键，这里加一个“完成”收起键盘。
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") {
+                    focusedField = nil
+                    refreshRender()
+                }
             }
         }
         .sheet(isPresented: $showingLibraryPicker) {
@@ -172,6 +187,10 @@ struct LayoutView: View {
                         }
                         .frame(width: geo.size.width, height: geo.size.width * 297 / 210)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .onTapGesture {
+                            // 点画布空白处，收起尺寸框的键盘。
+                            focusedField = nil
+                        }
                     }
                     .aspectRatio(CGSize(width: 210, height: 297), contentMode: .fit)
                 }
@@ -222,12 +241,12 @@ struct LayoutView: View {
                                 get: { item.widthMM },
                                 set: { job.setItemSize(id: item.id, widthMM: $0, heightMM: item.heightMM) }
                             ),
-                            format: .number
+                            format: .number.precision(.fractionLength(0...1))
                         )
                         .keyboardType(.decimalPad)
+                        .focused($focusedField, equals: .width)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 70)
-                        .onSubmit { refreshRender() }
+                        .frame(width: 76)
                         Text("mm")
                             .foregroundStyle(.white)
                     }
@@ -240,12 +259,12 @@ struct LayoutView: View {
                                 get: { item.heightMM },
                                 set: { job.setItemSize(id: item.id, widthMM: item.widthMM, heightMM: $0) }
                             ),
-                            format: .number
+                            format: .number.precision(.fractionLength(0...1))
                         )
                         .keyboardType(.decimalPad)
+                        .focused($focusedField, equals: .height)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 70)
-                        .onSubmit { refreshRender() }
+                        .frame(width: 76)
                         Text("mm")
                             .foregroundStyle(.white)
                     }
@@ -257,7 +276,7 @@ struct LayoutView: View {
                             .foregroundStyle(.white.opacity(0.85))
                     }
                 }
-                Text("改完尺寸按键盘上的“完成”就重新渲染；文字项改大小会自动缩放字号。")
+                Text("改完尺寸点键盘上的“完成”就重新渲染；点画布空白处、上下滑一下也能收起键盘。宽高只显示一位小数。文字项改大小会自动缩放字号。")
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.6))
             }
