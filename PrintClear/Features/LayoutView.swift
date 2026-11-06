@@ -11,7 +11,7 @@ struct LayoutView: View {
     @State private var newText = ""
     @State private var newFontSize: Double = 16
     @State private var selectedTemplate: LayoutTemplate = .smart
-    @State private var focusedField: SizeField?
+    @FocusState private var focusedField: SizeField?
     @State private var rendering = false
     @State private var note = ""
 
