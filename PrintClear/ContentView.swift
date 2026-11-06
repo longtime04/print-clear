@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var job = PrintJob()
+    @State private var library = LibraryStore()
 
     var body: some View {
         TabView {
@@ -10,6 +11,9 @@ struct ContentView: View {
             }
             Tab("抠图", systemImage: "scissors") {
                 CutoutView()
+            }
+            Tab("素材库", systemImage: "folder") {
+                LibraryView()
             }
             Tab("排版", systemImage: "doc.text") {
                 LayoutView()
@@ -20,5 +24,6 @@ struct ContentView: View {
         }
         .tint(.white)
         .environment(job)
+        .environment(library)
     }
 }

@@ -153,32 +153,38 @@ enum ImageProcessing {
         }
     }
 
-    // MARK: - A4 排版
+    // MARK: - 文字
 
-    /// 这张卡片在 A4 上每页最多放几张（边距 10mm、间距 5mm）。
-    static func maxCopies(
-        cardWidthMM: Double, cardHeightMM: Double,
-        marginMM: Double = 10, spacingMM: Double = 5
-    ) -> Int {
-        let cardW = px(forMM: cardWidthMM)
-        let cardH = px(forMM: cardHeightMM)
-        let margin = px(forMM: marginMM)
-        let spacing = px(forMM: spacingMM)
-        let cols = max(1, Int((a4WidthPx - 2 * margin + spacing) / (cardW + spacing)))
-        let rows = max(1, Int((a4HeightPx - 2 * margin + spacing) / (cardH + spacing)))
-        return cols * rows
+    /// 一段文字在某个字号下的占地（毫米）。支持换行，每行单独算。
+    static func textSizeMM(content: String, fontSizePt: Double) -> (width: Double, height: Double) {
+        let font = UIFont.systemFont(ofSize: fontSizePt)
+        let lines = content.components(separatedBy: "\n")
+        var maxW: CGFloat = 0
+        for line in lines {
+            let w = (line as NSString).size(withAttributes: [.font: font]).width
+            maxW = max(maxW, w)
+        }
+        let lineH = font.lineHeight
+        let widthMM = Double(maxW) * 25.4 / 72
+        let heightMM = Double(lineH) * Double(lines.count) * 25.4 / 72
+        return (widthMM, heightMM)
+    }
+
+    // MARK: - A4 排版（多图文混排）
+
+    /// 渲染用的项：图片或文字，位置和大小都是毫米。
+    struct RenderItem: Sendable {
+        var imageData: Data?
+        var text: String?
+        var fontSizePt: Double
+        var xMM: Double
+        var yMM: Double
+        var widthMM: Double
+        var heightMM: Double
     }
 
     /// 渲染 A4 页面图（300 DPI，2480×3508 像素，无损 PNG 级别）。
-    /// card 必须是已经改到目标打印尺寸的图。
-    static func renderA4Page(
-        card: UIImage, copies: Int,
-        marginMM: Double = 10, spacingMM: Double = 5
-    ) -> UIImage {
-        let cardW = card.size.width
-        let cardH = card.size.height
-        let margin = px(forMM: marginMM)
-        let spacing = px(forMM: spacingMM)
+    static func renderA4Page(items: [RenderItem]) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1.0
         format.opaque = true
@@ -188,52 +194,66 @@ enum ImageProcessing {
             context.cgContext.interpolationQuality = .high
             UIColor.white.setFill()
             context.fill(CGRect(x: 0, y: 0, width: a4WidthPx, height: a4HeightPx))
-            let cols = max(1, Int((a4WidthPx - 2 * margin + spacing) / (cardW + spacing)))
-            var placed = 0
-            var y = margin
-            while placed < copies && y + cardH <= a4HeightPx - margin + 1 {
-                var x = margin
-                for _ in 0..<cols {
-                    guard placed < copies else { break }
-                    card.draw(in: CGRect(x: x, y: y, width: cardW, height: cardH))
-                    placed += 1
-                    x += cardW + spacing
+            for item in items {
+                let rect = CGRect(
+                    x: px(forMM: item.xMM), y: px(forMM: item.yMM),
+                    width: px(forMM: item.widthMM), height: px(forMM: item.heightMM))
+                if let data = item.imageData, let image = UIImage(data: data) {
+                    image.draw(in: aspectFillRect(imageSize: image.size, into: rect))
+                } else if let text = item.text {
+                    drawText(text, fontSizePt: item.fontSizePt, in: rect, scale: dpi / 72)
                 }
-                y += cardH + spacing
             }
         }
     }
 
     /// 渲染 A4 PDF（A4 页面，图片按原分辨率嵌入）。
-    static func renderA4PDF(card: UIImage, copies: Int) -> Data {
+    static func renderA4PDF(items: [RenderItem]) -> Data {
         let pageRect = CGRect(x: 0, y: 0, width: a4WidthPt, height: a4HeightPt)
         let format = UIGraphicsPDFRendererFormat()
         let renderer = UIGraphicsPDFRenderer(bounds: pageRect, format: format)
         // 像素 → 点数：300 DPI 的像素除以 300 再乘 72。
         let scale = 72.0 / dpi
-        let cardW = card.size.width * scale
-        let cardH = card.size.height * scale
-        let margin = px(forMM: 10) * scale
-        let spacing = px(forMM: 5) * scale
         return renderer.pdfData { context in
             context.beginPage()
             let cg = context.cgContext
             cg.interpolationQuality = .high
             UIColor.white.setFill()
             cg.fill(pageRect)
-            let cols = max(1, Int((a4WidthPt - 2 * margin + spacing) / (cardW + spacing)))
-            var placed = 0
-            var y = margin
-            while placed < copies && y + cardH <= a4HeightPt - margin + 1 {
-                var x = margin
-                for _ in 0..<cols {
-                    guard placed < copies else { break }
-                    card.draw(in: CGRect(x: x, y: y, width: cardW, height: cardH))
-                    placed += 1
-                    x += cardW + spacing
+            for item in items {
+                let rect = CGRect(
+                    x: px(forMM: item.xMM) * scale, y: px(forMM: item.yMM) * scale,
+                    width: px(forMM: item.widthMM) * scale,
+                    height: px(forMM: item.heightMM) * scale)
+                if let data = item.imageData, let image = UIImage(data: data) {
+                    image.draw(in: aspectFillRect(imageSize: image.size, into: rect))
+                } else if let text = item.text {
+                    drawText(text, fontSizePt: item.fontSizePt, in: rect, scale: 1.0)
                 }
-                y += cardH + spacing
             }
+        }
+    }
+
+    /// 等比填满：按比例放大到盖住目标框，居中裁（不拉伸）。
+    private static func aspectFillRect(imageSize: CGSize, into rect: CGRect) -> CGRect {
+        let scale = max(rect.width / imageSize.width, rect.height / imageSize.height)
+        let w = imageSize.width * scale
+        let h = imageSize.height * scale
+        return CGRect(x: rect.minX + (rect.width - w) / 2, y: rect.minY + (rect.height - h) / 2, width: w, height: h)
+    }
+
+    /// 在指定框里画多行文字。scale 是“点数→当前坐标单位”的倍数
+    /// （PNG 渲染用 300/72，PDF 渲染用 1.0）。
+    private static func drawText(_ text: String, fontSizePt: Double, in rect: CGRect, scale: CGFloat) {
+        let font = UIFont.systemFont(ofSize: fontSizePt * scale)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font, .foregroundColor: UIColor.black,
+        ]
+        let lines = text.components(separatedBy: "\n")
+        let lineH = font.lineHeight
+        for (i, line) in lines.enumerated() {
+            let attributed = NSAttributedString(string: line, attributes: attributes)
+            attributed.draw(at: CGPoint(x: rect.minX, y: rect.minY + CGFloat(i) * lineH))
         }
     }
 }

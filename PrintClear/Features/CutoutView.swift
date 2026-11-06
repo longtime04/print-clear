@@ -6,6 +6,7 @@ import UIKit
 /// 2. 人像去背景：只认得出人像，背景变透明（打印默认白底）。
 struct CutoutView: View {
     @Environment(PrintJob.self) private var job
+    @Environment(LibraryStore.self) private var library
     @State private var mode: CutoutMode = .document
     @State private var corners: [CGPoint] = [
         CGPoint(x: 0.02, y: 0.02), CGPoint(x: 0.98, y: 0.02),
@@ -14,6 +15,7 @@ struct CutoutView: View {
     @State private var cutoutImage: UIImage?
     @State private var whiteBackground = true
     @State private var note = ""
+    @State private var libraryName = ""
 
     enum CutoutMode: String, CaseIterable, Identifiable {
         case document = "证件抠边"
@@ -134,6 +136,7 @@ struct CutoutView: View {
                     .buttonStyle(.bordered)
                     .tint(.white)
                     .disabled(job.workingImage == nil)
+                    saveToLibraryRow
                     if job.isBusy {
                         ProgressView("处理中…")
                             .foregroundStyle(.white)
@@ -206,6 +209,7 @@ struct CutoutView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
                     .disabled(cutoutImage == nil)
+                    saveToLibraryRow
                     if job.isBusy {
                         ProgressView("处理中…")
                             .foregroundStyle(.white)
@@ -218,6 +222,45 @@ struct CutoutView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - 存入素材库
+
+    private var saveToLibraryRow: some View {
+        VStack(spacing: 8) {
+            TextField("起个名字，如：我的身份证", text: $libraryName)
+                .textFieldStyle(.roundedBorder)
+            Button {
+                saveToLibrary()
+            } label: {
+                Label("存入素材库", systemImage: "folder.badge.plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .disabled(job.workingImage == nil)
+            Text("按当前打印尺寸（\(job.preset.name)）存，之后在“素材库”里随时加到排版页上。")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private func saveToLibrary() {
+        guard let working = job.workingImage else { return }
+        let name = libraryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = name.isEmpty ? job.preset.name : name
+        // 按当前打印尺寸改好像素再存，保证印出来是 300 DPI。
+        let sized = ImageProcessing.resizedForPrint(
+            working, widthMM: job.targetWidthMM, heightMM: job.targetHeightMM)
+        if library.save(
+            image: sized, name: finalName,
+            widthMM: job.targetWidthMM, heightMM: job.targetHeightMM) != nil {
+            note = "已存入素材库：\(finalName)（\(job.preset.name)）。"
+            libraryName = ""
+        } else {
+            note = "存入失败，请再试一次。"
         }
     }
 
