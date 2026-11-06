@@ -152,41 +152,25 @@ final class PrintJob {
         pagePDF = nil
     }
 
-    /// 自动排版：按面积从大到小，一行一行摆满，留 10mm 边距、5mm 间距。
-    /// 单张比一页还大的，等比缩小到能放下。排完还能手动改。
-    func autoLayout() {
-        let margin = 10.0
-        let spacing = 5.0
-        let maxW = 210 - 2 * margin
-        let maxH = 297 - 2 * margin
-        let sorted = pageItems.sorted { $0.widthMM * $0.heightMM > $1.widthMM * $1.heightMM }
-        var x = margin
-        var y = margin
-        var rowH = 0.0
-        var placed: [UUID: PageItem] = [:]
-        for var item in sorted {
-            if item.widthMM > maxW || item.heightMM > maxH {
-                let s = min(maxW / item.widthMM, maxH / item.heightMM)
-                item.widthMM *= s
-                item.heightMM *= s
-                if case .text(let content, let fontSize) = item.kind {
-                    item.kind = .text(content, max(fontSize * s, 6))
-                }
-            }
-            if x + item.widthMM > 210 - margin + 0.01, x > margin {
-                x = margin
-                y += rowH + spacing
-                rowH = 0
-            }
-            item.xMM = x
-            item.yMM = y
-            placed[item.id] = item
-            x += item.widthMM + spacing
-            rowH = max(rowH, item.heightMM)
-        }
-        pageItems = pageItems.map { placed[$0.id] ?? $0 }
+    /// 旋转一项 90°（顺时针），宽高互换。
+    func rotateItem(id: UUID) {
+        guard let i = pageItems.firstIndex(where: { $0.id == id }) else { return }
+        let w = pageItems[i].widthMM
+        pageItems[i].widthMM = pageItems[i].heightMM
+        pageItems[i].heightMM = w
+        pageItems[i].rotation = (pageItems[i].rotation + 90) % 360
         pageImage = nil
         pagePDF = nil
+    }
+
+    /// 按选中的排版类型自动排版。返回一句说明。
+    @discardableResult
+    func applyLayout(template: LayoutTemplate) -> String {
+        let (placed, note) = LayoutEngine.apply(template: template, to: pageItems)
+        pageItems = placed
+        pageImage = nil
+        pagePDF = nil
+        return note
     }
 }
 
@@ -200,6 +184,8 @@ struct PageItem: Identifiable, Equatable {
     var yMM: Double
     var widthMM: Double
     var heightMM: Double
+    /// 旋转角度（0 / 90 / 180 / 270，顺时针）。
+    var rotation: Int = 0
 
     enum Kind: Equatable {
         case image(UIImage)
@@ -221,6 +207,7 @@ struct PageItem: Identifiable, Equatable {
         a.id == b.id && a.name == b.name && a.kind == b.kind
             && a.xMM == b.xMM && a.yMM == b.yMM
             && a.widthMM == b.widthMM && a.heightMM == b.heightMM
+            && a.rotation == b.rotation
     }
 }
 

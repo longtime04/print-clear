@@ -10,6 +10,7 @@ struct LayoutView: View {
     @State private var showingAddText = false
     @State private var newText = ""
     @State private var newFontSize: Double = 16
+    @State private var selectedTemplate: LayoutTemplate = .smart
     @State private var rendering = false
     @State private var note = ""
 
@@ -95,17 +96,25 @@ struct LayoutView: View {
                     .tint(.cyan)
                 }
                 HStack(spacing: 10) {
+                    Picker("排版类型", selection: $selectedTemplate) {
+                        ForEach(LayoutTemplate.allCases) { t in
+                            Text(t.rawValue).tag(t)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.white)
                     Button {
-                        job.autoLayout()
-                        note = "已自动排版（大的在前，一行一行摆满），还能手动改。"
+                        note = job.applyLayout(template: selectedTemplate)
                         refreshRender()
                     } label: {
                         Label("自动排版", systemImage: "rectangle.grid.3x2")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.white)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.cyan)
                     .disabled(job.pageItems.isEmpty)
+                }
+                HStack(spacing: 10) {
                     Button(role: .destructive) {
                         job.clearPage()
                         note = ""
@@ -117,7 +126,7 @@ struct LayoutView: View {
                     .tint(.white)
                     .disabled(job.pageItems.isEmpty)
                 }
-                Text("页上有 \(job.pageItems.count) 项。点一下选中，拖动改位置；同一素材加多次，就能印多张。")
+                Text("页上有 \(job.pageItems.count) 项。点一下选中，拖动改位置；同一素材加多次，就能印多张。智能推荐会按图片大小、方向挑裁得最少的排法。")
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.75))
                     .multilineTextAlignment(.center)
@@ -186,6 +195,14 @@ struct LayoutView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
                     Spacer()
+                    Button {
+                        job.rotateItem(id: item.id)
+                        refreshRender()
+                    } label: {
+                        Label("旋转 90°", systemImage: "rotate.right")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
                     Button(role: .destructive) {
                         job.removePageItem(id: item.id)
                         refreshRender()
@@ -301,11 +318,13 @@ struct LayoutView: View {
             case .image(let img):
                 return ImageProcessing.RenderItem(
                     imageData: img.pngData(), text: nil, fontSizePt: 0,
-                    xMM: item.xMM, yMM: item.yMM, widthMM: item.widthMM, heightMM: item.heightMM)
+                    xMM: item.xMM, yMM: item.yMM, widthMM: item.widthMM, heightMM: item.heightMM,
+                    rotation: item.rotation)
             case .text(let content, let fontSize):
                 return ImageProcessing.RenderItem(
                     imageData: nil, text: content, fontSizePt: fontSize,
-                    xMM: item.xMM, yMM: item.yMM, widthMM: item.widthMM, heightMM: item.heightMM)
+                    xMM: item.xMM, yMM: item.yMM, widthMM: item.widthMM, heightMM: item.heightMM,
+                    rotation: item.rotation)
             }
         }
         rendering = true
@@ -343,9 +362,6 @@ private struct PageItemView: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             itemContent
-                .frame(
-                    width: item.widthMM * scale,
-                    height: item.heightMM * scale)
             if isSelected {
                 Circle()
                     .fill(Color.blue)
@@ -399,19 +415,28 @@ private struct PageItemView: View {
 
     @ViewBuilder
     private var itemContent: some View {
-        switch item.kind {
-        case .image(let img):
-            Image(uiImage: img)
-                .resizable()
-                .scaledToFill()
-                .clipped()
-        case .text(let content, let fontSize):
-            Text(content)
-                .font(.system(size: fontSize * 25.4 / 72 * scale))
-                .foregroundStyle(.black)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(Color.white)
+        // 转 90° / 270° 时，先按转之前的框画，再整个转过来。
+        let sideways = item.rotation == 90 || item.rotation == 270
+        let innerW = sideways ? item.heightMM : item.widthMM
+        let innerH = sideways ? item.widthMM : item.heightMM
+        Group {
+            switch item.kind {
+            case .image(let img):
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .clipped()
+            case .text(let content, let fontSize):
+                Text(content)
+                    .font(.system(size: fontSize * 25.4 / 72 * scale))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .background(Color.white)
+            }
         }
+        .frame(width: innerW * scale, height: innerH * scale)
+        .rotationEffect(.degrees(Double(item.rotation)))
+        .frame(width: item.widthMM * scale, height: item.heightMM * scale)
     }
 }
 

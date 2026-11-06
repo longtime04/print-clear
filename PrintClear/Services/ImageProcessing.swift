@@ -181,6 +181,8 @@ enum ImageProcessing {
         var yMM: Double
         var widthMM: Double
         var heightMM: Double
+        /// 旋转角度（0 / 90 / 180 / 270，顺时针）。
+        var rotation: Int = 0
     }
 
     /// 渲染 A4 页面图（300 DPI，2480×3508 像素，无损 PNG 级别）。
@@ -198,11 +200,7 @@ enum ImageProcessing {
                 let rect = CGRect(
                     x: px(forMM: item.xMM), y: px(forMM: item.yMM),
                     width: px(forMM: item.widthMM), height: px(forMM: item.heightMM))
-                if let data = item.imageData, let image = UIImage(data: data) {
-                    image.draw(in: aspectFillRect(imageSize: image.size, into: rect))
-                } else if let text = item.text {
-                    drawText(text, fontSizePt: item.fontSizePt, in: rect, scale: dpi / 72)
-                }
+                drawRenderItem(item, in: rect, context: context.cgContext, scale: dpi / 72)
             }
         }
     }
@@ -225,12 +223,40 @@ enum ImageProcessing {
                     x: px(forMM: item.xMM) * scale, y: px(forMM: item.yMM) * scale,
                     width: px(forMM: item.widthMM) * scale,
                     height: px(forMM: item.heightMM) * scale)
-                if let data = item.imageData, let image = UIImage(data: data) {
-                    image.draw(in: aspectFillRect(imageSize: image.size, into: rect))
-                } else if let text = item.text {
-                    drawText(text, fontSizePt: item.fontSizePt, in: rect, scale: 1.0)
-                }
+                drawRenderItem(item, in: rect, context: cg, scale: 1.0)
             }
+        }
+    }
+
+    /// 画一项（图片或文字），带旋转。旋转绕着格子中心转。
+    private static func drawRenderItem(
+        _ item: RenderItem, in rect: CGRect, context: CGContext, scale: CGFloat
+    ) {
+        let rot = item.rotation % 360
+        if rot == 0 {
+            drawItemContent(item, in: rect, scale: scale)
+            return
+        }
+        // 转之前的格子（中心和格子重合，长宽互换）。
+        let preW = (rot == 90 || rot == 270) ? rect.height : rect.width
+        let preH = (rot == 90 || rot == 270) ? rect.width : rect.height
+        let preRect = CGRect(
+            x: rect.midX - preW / 2, y: rect.midY - preH / 2,
+            width: preW, height: preH)
+        context.saveGState()
+        context.translateBy(x: rect.midX, y: rect.midY)
+        context.rotate(by: CGFloat(rot) * .pi / 180)
+        context.translateBy(x: -rect.midX, y: -rect.midY)
+        drawItemContent(item, in: preRect, scale: scale)
+        context.restoreGState()
+    }
+
+    /// 在指定框里画一项的内容（不处理旋转）。
+    private static func drawItemContent(_ item: RenderItem, in rect: CGRect, scale: CGFloat) {
+        if let data = item.imageData, let image = UIImage(data: data) {
+            image.draw(in: aspectFillRect(imageSize: image.size, into: rect))
+        } else if let text = item.text {
+            drawText(text, fontSizePt: item.fontSizePt, in: rect, scale: scale)
         }
     }
 
