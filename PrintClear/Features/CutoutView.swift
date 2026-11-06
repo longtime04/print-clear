@@ -240,7 +240,7 @@ struct CutoutView: View {
             .buttonStyle(.borderedProminent)
             .tint(.orange)
             .disabled(job.workingImage == nil)
-            Text("按当前打印尺寸（\(job.preset.name)）存，之后在“素材库”里随时加到排版页上。")
+            Text("按当前打印尺寸（\(job.preset.name)）存，整张图都会保留、不裁边，不够的地方补白边；之后在“素材库”里随时加到排版页上。")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
@@ -278,7 +278,7 @@ struct CutoutView: View {
             job.isBusy = false
             if let found {
                 corners = found
-                note = "已认出证件边缘，拖四角可以微调，再点“拉正并裁剪”。"
+                note = "已认出证件边缘（留了一点边，边沿都含进来了），拖四角可以微调，再点“拉正并裁剪”。"
             } else {
                 note = "没认出证件边缘，请手动拖四个角对准证件。"
             }

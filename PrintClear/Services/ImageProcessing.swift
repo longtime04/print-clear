@@ -38,12 +38,21 @@ enum ImageProcessing {
         }
         guard let rect = request.results?.first else { return nil }
         // Vision 归一化坐标原点在左下角，转成 UIKit 左上角。
-        return [
+        let corners = [
             CGPoint(x: rect.topLeft.x, y: 1 - rect.topLeft.y),
             CGPoint(x: rect.topRight.x, y: 1 - rect.topRight.y),
             CGPoint(x: rect.bottomRight.x, y: 1 - rect.bottomRight.y),
             CGPoint(x: rect.bottomLeft.x, y: 1 - rect.bottomLeft.y),
         ]
+        // 认出的框往往比证件实际边缘小一圈（贴着里面的印线）：
+        // 从中心往外放 3%，把证件的边沿完整含进来，再拖四角微调。
+        let cx = corners.map { $0.x }.reduce(0, +) / 4
+        let cy = corners.map { $0.y }.reduce(0, +) / 4
+        return corners.map { p in
+            CGPoint(
+                x: min(max(cx + (p.x - cx) * 1.03, 0), 1),
+                y: min(max(cy + (p.y - cy) * 1.03, 0), 1))
+        }
     }
 
     /// 按四角点做透视拉正，输出一张长方形的图。
@@ -127,8 +136,8 @@ enum ImageProcessing {
             context.cgContext.interpolationQuality = .high
             UIColor.white.setFill()
             context.fill(CGRect(x: 0, y: 0, width: targetW, height: targetH))
-            // 等比填满：按比例放大到盖住目标框，居中裁。
-            let scale = max(targetW / image.size.width, targetH / image.size.height)
+            // 等比完整放下：整张图都保留，不够的地方补白边，绝不裁内容。
+            let scale = min(targetW / image.size.width, targetH / image.size.height)
             let drawW = image.size.width * scale
             let drawH = image.size.height * scale
             let drawX = (targetW - drawW) / 2

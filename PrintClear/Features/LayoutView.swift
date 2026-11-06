@@ -16,7 +16,7 @@ struct LayoutView: View {
     @State private var note = ""
 
     /// 尺寸面板里正在输的框（宽 / 高），用来收起键盘。
-    private enum SizeField { case width, height }
+    private enum SizeField: Hashable { case width, height }
 
     var body: some View {
         ZStack {
@@ -332,34 +332,10 @@ struct LayoutView: View {
             job.pagePDF = nil
             return
         }
-        let inputs: [ImageProcessing.RenderItem] = job.pageItems.map { item in
-            switch item.kind {
-            case .image(let img):
-                return ImageProcessing.RenderItem(
-                    imageData: img.pngData(), text: nil, fontSizePt: 0,
-                    xMM: item.xMM, yMM: item.yMM, widthMM: item.widthMM, heightMM: item.heightMM,
-                    rotation: item.rotation)
-            case .text(let content, let fontSize):
-                return ImageProcessing.RenderItem(
-                    imageData: nil, text: content, fontSizePt: fontSize,
-                    xMM: item.xMM, yMM: item.yMM, widthMM: item.widthMM, heightMM: item.heightMM,
-                    rotation: item.rotation)
-            }
-        }
         rendering = true
         Task {
-            let outData: (Data, Data)? = await Task.detached {
-                let page = ImageProcessing.renderA4Page(items: inputs)
-                let pdf = ImageProcessing.renderA4PDF(items: inputs)
-                guard let pageData = page.pngData() else { return nil }
-                return (pageData, pdf)
-            }.value
+            await job.renderPage()
             rendering = false
-            guard let (pageData, pdf) = outData,
-                  let page = UIImage(data: pageData)
-            else { return }
-            job.pageImage = page
-            job.pagePDF = pdf
         }
     }
 }

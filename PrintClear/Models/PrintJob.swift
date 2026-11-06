@@ -172,6 +172,42 @@ final class PrintJob {
         pagePDF = nil
         return note
     }
+
+    // MARK: - 渲染 A4 页面（排版预览和导出共用）
+
+    /// 渲染 A4 页面图（300 DPI）+ PDF。排版改了就要重新渲染。
+    func renderPage() async {
+        guard !pageItems.isEmpty else {
+            pageImage = nil
+            pagePDF = nil
+            return
+        }
+        let inputs: [ImageProcessing.RenderItem] = pageItems.map { item in
+            switch item.kind {
+            case .image(let img):
+                return ImageProcessing.RenderItem(
+                    imageData: img.pngData(), text: nil, fontSizePt: 0,
+                    xMM: item.xMM, yMM: item.yMM, widthMM: item.widthMM, heightMM: item.heightMM,
+                    rotation: item.rotation)
+            case .text(let content, let fontSize):
+                return ImageProcessing.RenderItem(
+                    imageData: nil, text: content, fontSizePt: fontSize,
+                    xMM: item.xMM, yMM: item.yMM, widthMM: item.widthMM, heightMM: item.heightMM,
+                    rotation: item.rotation)
+            }
+        }
+        let outData: (Data, Data)? = await Task.detached {
+            let page = ImageProcessing.renderA4Page(items: inputs)
+            let pdf = ImageProcessing.renderA4PDF(items: inputs)
+            guard let pageData = page.pngData() else { return nil }
+            return (pageData, pdf)
+        }.value
+        guard let (pageData, pdf) = outData,
+              let page = UIImage(data: pageData)
+        else { return }
+        pageImage = page
+        pagePDF = pdf
+    }
 }
 
 /// 排版页上的一项：图片或文字。
