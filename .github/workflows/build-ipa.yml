@@ -1,0 +1,45 @@
+name: Build IPA
+
+# 每次推到 main 就编一次；也可以在 Actions 页面手动触发。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          swift --version
+          ls /Applications | grep -i xcode || true
+
+      - name: Archive (unsigned)
+        run: |
+          xcodebuild archive \
+            -project PrintClear.xcodeproj \
+            -scheme PrintClear \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/PrintClear.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/PrintClear.xcarchive/Products/Applications/PrintClear.app Payload/
+          zip -r PrintClear-1.0.0-unsigned.ipa Payload
+          ls -lh *.ipa
+          unzip -l PrintClear-1.0.0-unsigned.ipa | head -20
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrintClear-unsigned-ipa
+          path: PrintClear-1.0.0-unsigned.ipa
+          if-no-files-found: error
