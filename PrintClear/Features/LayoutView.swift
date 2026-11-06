@@ -47,7 +47,8 @@ struct LayoutView: View {
     // MARK: - 尺寸
 
     private var sizeCard: some View {
-        GlassCard {
+        let bindable = Bindable(job)
+        return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 Text("打印尺寸")
                     .font(.headline)
@@ -84,7 +85,7 @@ struct LayoutView: View {
                         HStack {
                             Text("宽")
                                 .foregroundStyle(.white)
-                            TextField("85.6", value: $job.customWidthMM, format: .number)
+                            TextField("85.6", value: bindable.customWidthMM, format: .number)
                                 .keyboardType(.decimalPad)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 70)
@@ -94,7 +95,7 @@ struct LayoutView: View {
                         HStack {
                             Text("高")
                                 .foregroundStyle(.white)
-                            TextField("54", value: $job.customHeightMM, format: .number)
+                            TextField("54", value: bindable.customHeightMM, format: .number)
                                 .keyboardType(.decimalPad)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 70)
@@ -120,7 +121,7 @@ struct LayoutView: View {
                     .foregroundStyle(.white)
                 Stepper(
                     "\(job.copiesPerPage) 张（每页最多 \(job.maxCopies) 张）",
-                    value: $job.copiesPerPage, in: 1...max(1, job.maxCopies))
+                    value: Bindable(job).copiesPerPage, in: 1...max(1, job.maxCopies))
                     .foregroundStyle(.white)
                 Text("边距 10mm，间距 5mm，A4 纸 210×297mm。")
                     .font(.footnote)

@@ -228,7 +228,7 @@ struct CutoutView: View {
         job.isBusy = true
         note = ""
         Task {
-            let found = await Task.detached {
+            let found: [CGPoint]? = await Task.detached {
                 guard let image = UIImage(data: data)?.normalized() else { return nil }
                 return ImageProcessing.detectDocumentCorners(in: image)
             }.value

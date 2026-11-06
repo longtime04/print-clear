@@ -87,7 +87,7 @@ enum ImageProcessing {
         guard !instances.isEmpty else { return nil }
         do {
             let buffer = try observation.generateMaskedImage(
-                ofInstances: instances, from: handler, croppedToInstanceExtent: false)
+                ofInstances: instances, from: handler, croppedToInstancesExtent: false)
             let ci = CIImage(cvPixelBuffer: buffer)
             let context = CIContext(options: nil)
             guard let outCG = context.createCGImage(ci, from: ci.extent) else { return nil }
